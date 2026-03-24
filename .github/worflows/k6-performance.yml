@@ -1,0 +1,148 @@
+name: K6 Performance Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+concurrency:
+  group: k6-performance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  setup:
+    name: Setup k6
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar k6
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnupg software-properties-common
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+
+      - name: Validar instalação
+        run: k6 version
+
+  k6_get:
+    name: 🔵 GET
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - uses: actions/checkout@v4
+      - run: mkdir -p results
+
+      - name: Run GET
+        run: |
+          k6 run \
+            --summary-export results/get-summary.json \
+            tests/teste-get.js | tee results/get.log
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: k6-get
+          path: results/
+
+  k6_post:
+    name: 🟢 POST
+    runs-on: ubuntu-latest
+    needs: k6_get
+    steps:
+      - uses: actions/checkout@v4
+      - run: mkdir -p results
+
+      - name: Run POST
+        run: |
+          k6 run \
+            --summary-export results/post-summary.json \
+            tests/teste-post.js | tee results/post.log
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: k6-post
+          path: results/
+
+  k6_put:
+    name: 🟡 PUT
+    runs-on: ubuntu-latest
+    needs: k6_post
+    steps:
+      - uses: actions/checkout@v4
+      - run: mkdir -p results
+
+      - name: Run PUT
+        run: |
+          k6 run \
+            --summary-export results/put-summary.json \
+            tests/teste-put.js | tee results/put.log
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: k6-put
+          path: results/
+
+  k6_delete:
+    name: 🔴 DELETE
+    runs-on: ubuntu-latest
+    needs: k6_put
+    steps:
+      - uses: actions/checkout@v4
+      - run: mkdir -p results
+
+      - name: Run DELETE
+        run: |
+          k6 run \
+            --summary-export results/delete-summary.json \
+            tests/teste-delete.js | tee results/delete.log
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: k6-delete
+          path: results/
+
+  k6_crud:
+    name: ⚙️ CRUD
+    runs-on: ubuntu-latest
+    needs: k6_delete
+    steps:
+      - uses: actions/checkout@v4
+      - run: mkdir -p results
+
+      - name: Run CRUD
+        run: |
+          k6 run \
+            --summary-export results/crud-summary.json \
+            tests/teste-crud.js | tee results/crud.log
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: k6-crud
+          path: results/
+
+  k6_crud_producao:
+    name: 🚀 PRODUÇÃO
+    runs-on: ubuntu-latest
+    needs: k6_crud
+    steps:
+      - uses: actions/checkout@v4
+      - run: mkdir -p results
+
+      - name: Run CRUD Produção
+        run: |
+          k6 run \
+            --summary-export results/prod-summary.json \
+            tests/teste-crud-producao.js | tee results/prod.log
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: k6-producao
+          path: results/

@@ -1,0 +1,12 @@
+{
+  "devDependencies": {
+    "@types/k6": "^1.6.0"
+  },
+  "dependencies": {
+    "faker": "^5.5.3",
+    "k6": "^0.0.0"
+  },
+  "scripts": {
+    "k6:get": "k6 run -e BASE_URL=http://localhost:8080/sdopen/api -e AUTH_USER=sdopen -e AUTH_PASS=123 tests/get/test-get.js"
+  }
+}
