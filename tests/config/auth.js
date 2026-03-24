@@ -17,9 +17,6 @@ export function getToken() {
     // 2. Montar a URL completa
     const url = `${BASE_URL}${AUTH_PATH}`;
 
-    console.log(`[AUTH] Tentando login em: ${url}`);
-    console.log(`[AUTH] Usuário utilizado: ${AUTH_USER}`);
-
     const params = {
         headers: {
             'Authorization': `Basic ${credentials}`,
@@ -27,10 +24,8 @@ export function getToken() {
         },
     };
 
-    // 3. Realizar o POST (Corpo vazio/null conforme seu Postman 'none')
     const res = http.post(url, null, params);
 
-    // 4. Validação da Resposta
     if (res.status !== 200) {
         console.error(`[AUTH] ERRO NO LOGIN! Status: ${res.status}`);
         console.error(`[AUTH] CORPO DA RESPOSTA: ${res.body}`);
@@ -39,7 +34,6 @@ export function getToken() {
 
     const body = res.json();
 
-    // 5. Extração do Token (Campo 'access_token' conforme sua imagem)
     if (!body.access_token) {
         console.error("[AUTH] ERRO: O campo 'access_token' não foi encontrado no JSON!");
         return null;
