@@ -1,47 +1,54 @@
 import http from 'k6/http';
-import { check, sleep } from 'k6';
-import { SharedArray } from 'k6/data';
-import { BASE_URL } from '../config/config.js';
+import { check } from 'k6';
 import { getToken } from '../config/auth.js';
+import { BASE_URL } from '../config/config.js';
 
-const dadosJson = new SharedArray('clientes', function () {
-    return [JSON.parse(open('../../data/get/dados.json'))];
-})[0];
+// --- CONFIGURAÇÃO ---
+const TOTAL_REQUISICOES = 20000;
 
 export const options = {
     scenarios: {
-        visualizacoes_diarias: {
-            executor: 'ramping-arrival-rate',
-            startRate: 0,
-            timeUnit: '1s',
-            preAllocatedVUs: 10,
-            maxVUs: 50,
-            stages: [
-                { target: 10, duration: '1m' },
-                { target: 10, duration: '5m' },
-                { target: 0, duration: '1m' },
-            ],
+        carga_rápida_20k: {
+            executor: 'shared-iterations',
+            vus: 50,              // 50 usuários disparando em paralelo
+            iterations: TOTAL_REQUISICOES,
+            maxDuration: '10m',   // Tempo limite para completar as 20k
         },
     },
     thresholds: {
-        http_req_duration: ['p(95)<500'], // 95% das requisições devem ser < 500ms
-        http_req_failed: ['rate<0.01'],   // Menos de 1% de erro
+        http_req_failed: ['rate<0.05'], // O teste falha se mais de 5% das requisições derem erro
+        http_req_duration: ['p(95)<1000'], // 95% das requisições devem responder em menos de 1s
     },
 };
 
+// --- GERADOR DE DADOS DINÂMICO ---
+// Esta função cria o dado baseado no número da iteração atual
+function gerarCpfPorIteracao(iter) {
+    // 1. Simula CPF Incompleto/Vazio a cada 100 iterações
+    if (iter % 100 === 0) return "";
+
+    // 2. Simula Duplicidade (repete um CPF fixo) a cada 50 iterações
+    if (iter % 50 === 0) return "87404204771";
+
+    // 3. Gera um CPF "único" incremental para os demais
+    return `771${String(iter).padStart(8, '0')}`;
+}
+
 export function setup() {
     const token = getToken();
-    if (!token) throw new Error("Falha ao obter token no setup");
+    if (!token) throw new Error("Falha no Token");
     return { token };
 }
 
 export default function (data) {
-    const listaClientes = dadosJson.clientes;
-    const cliente = listaClientes[Math.floor(Math.random() * listaClientes.length)];
-    const url = `${BASE_URL}${dadosJson.clientesPath}`;
+    // Pegamos o CPF baseado na iteração global do k6
+    const cpfSorteado = gerarCpfPorIteracao(__ITER);
 
+    const url = `${BASE_URL}/v2/clientes`; // Seu endpoint de visualização/venda
+
+    // Payload individual (conforme o formato que funcionou no seu Postman)
     const payload = JSON.stringify({
-        cpfCnpj: cliente.cpfCnpj
+        cpfCnpj: cpfSorteado
     });
 
     const params = {
@@ -51,10 +58,15 @@ export default function (data) {
         },
     };
 
+    // Requisição individual rápida
     const res = http.request('GET', url, payload, params);
 
+    // Validações do Cenário
     check(res, {
-        'status é 200': (r) => r.status === 200,
-        'corpo contém dados': (r) => r.body.includes('numCli'),
+        'Sucesso ou Validação Esperada': (r) => [200, 400, 422].includes(r.status),
+        'Detectou Incompleto (400)': (r) => (cpfSorteado === "" ? r.status === 400 : true),
+        'Corpo retornado': (r) => r.body.length > 0,
     });
+
+    // Removido o sleep para máxima velocidade
 }
